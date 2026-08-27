@@ -1,0 +1,41 @@
+{
+  "description": "Context Guardian v3.2: PostCompact counting + Stop handoff gate + repetition signals.",
+  "hooks": {
+    "PostCompact": [
+      {
+        "matcher": "^(auto|manual)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.codex/context-guardian/context_guardian.py\"",
+            "timeout": 5,
+            "statusMessage": "Recording context compaction"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.codex/context-guardian/context_guardian.py\"",
+            "timeout": 5,
+            "statusMessage": "Checking context handoff gate"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.codex/context-guardian/context_guardian.py\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

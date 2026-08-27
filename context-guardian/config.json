@@ -1,0 +1,6 @@
+{
+  "soft_compactions": 2,
+  "hard_compactions": 3,
+  "repeat_threshold": 3,
+  "track_repetition_after_compaction": true
+}
