@@ -112,7 +112,7 @@ $sub-agent
 ```
 
 - `PostCompact` 记录当前会话的 compaction 次数并给出简短的防重复提醒；
-- `PostToolUse` 在 compaction 后检测相同工具动作或路径是否反复出现，忽略 wait、Agent 生命周期、写入工具和明确失败的调用；
+- `PostToolUse` 在 compaction 后检测相同工具动作或路径是否反复出现，忽略 wait、Agent 生命周期、写入工具和明确失败的调用；drift 信号只提醒模型避免重复工作，不会改变 handoff 状态或提前触发交接；
 - `Stop` 会在 soft/hard 阈值时阻止未完成任务直接结束，并要求执行 `context-handoff`；只有交接已验证、任务已完成或阻塞已明确记录时才放行；
 - Guardian 状态写入使用每会话文件锁和唯一临时文件，避免并行 Hook 覆盖计数。
 

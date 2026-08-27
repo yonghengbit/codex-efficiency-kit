@@ -109,7 +109,7 @@ class ContextGuardianTests(unittest.TestCase):
             "{}",
         )
 
-    def test_wait_and_explicit_failure_are_not_counted(self) -> None:
+    def test_drift_tracking_ignores_noise_and_does_not_trigger_handoff(self) -> None:
         payload = {
             "session_id": "tools",
             "model": "gpt-5.6-sol",
@@ -156,6 +156,18 @@ class ContextGuardianTests(unittest.TestCase):
                 self.cfg,
             )
         self.assertIn("drift signal", last)
+        state = guardian.load_state_unlocked(self.base, "tools")
+        self.assertEqual(state["handoff_status"], "idle")
+        self.assertEqual(state["handoff_attempts"], 0)
+        self.assertEqual(
+            self.capture(
+                guardian.stop,
+                {"session_id": "tools", "turn_id": "turn-1", "stop_hook_active": False},
+                self.base,
+                self.cfg,
+            ),
+            "{}",
+        )
 
     def test_concurrent_state_updates_do_not_drop_counts(self) -> None:
         def increment() -> None:
