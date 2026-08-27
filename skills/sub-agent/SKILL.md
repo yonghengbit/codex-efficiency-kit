@@ -1,6 +1,6 @@
 ---
 name: sub-agent
-description: 使用当前主智能体规划和验收，并在当前任务内拉起 Terra High 子智能体执行；当用户调用 `$sub-agent`、要求使用默认子智能体工作流，或明确要求拉起/委派子智能体时使用。若没有具体任务，先询问任务；不要自行猜测或主动委派。讨论、纯规划请求以及用户明确指定其他编排方式时不要使用。
+description: 使用当前主智能体规划和验收，并在当前任务内拉起 Terra High 子智能体执行；当用户调用 `$sub-agent`、要求使用默认子智能体工作流、明确要求委派，或同一未完成任务的有效 handoff checkpoint 记录了原始用户的显式委派授权时使用。若没有具体任务，先询问任务；不要自行猜测或主动委派。
 ---
 
 # Sub-agent
@@ -9,11 +9,18 @@ description: 使用当前主智能体规划和验收，并在当前任务内拉�
 
 这个 Skill 是**显式编排工作流**，不是全局自动路由器。普通任务不要因为 Terra 更便宜就主动拉起子智能体。
 
-Context handoff must never activate this Skill implicitly. Fresh-root lifecycle switching and Terra worker delegation are separate mechanisms.
+Context handoff must never create delegation authority. It may preserve this
+Skill as the active workflow when the same unfinished task's checkpoint records
+that the original user explicitly authorized it. Fresh-root lifecycle switching
+and Terra worker delegation remain separate mechanisms.
 
 ## 启动条件
 
 - 仅在用户显式调用 `$sub-agent`、要求使用默认 Sol–Terra 工作流，或明确要求拉起/委派子智能体时启动。
+- 同一未完成任务发生 context handoff 时，若 checkpoint 同时记录
+  `WORKFLOW_MODE: sub-agent`、`DELEGATION_ORIGIN: explicit-user` 和明确的
+  `DELEGATION_SCOPE`，新主智能体应继承本 Skill。该授权在原任务完成、用户
+  开始新任务、用户取消委派或 checkpoint 无法证明原始授权时失效。
 - 若用户没有给出可执行的具体任务，只问：“要让子智能体完成什么任务？”不要拉起智能体，也不要猜测任务、模型或目标。
 - 若任务已经明确，直接开始，不要再次询问模型；默认执行者就是 Terra High。
 - 用户明确指定的模型、推理强度、并发方式或执行边界优先于本 Skill 的默认值。
@@ -52,7 +59,7 @@ Context handoff must never activate this Skill implicitly. Fresh-root lifecycle 
    - 明确的 write scope / read scope（若适用）；
    - 要求返回的改动摘要、测试证据、剩余风险和阻塞项。
 4. 子智能体负责被委派范围内的实现、测试、调试和必要修复。主智能体在它执行期间不重复实现或重复调查同一工作。
-5. 主智能体可以继续执行**不重叠且不依赖子智能体立即返回**的关键路径工作；不要反复 wait/poll，也不要为了等待结果停掉所有可推进工作。
+5. 主智能体可以继续执行**不重叠且不依赖子智能体立即返回**的关键路径工作；不要为了等待结果停掉所有可推进工作。需要等待时使用一个有界 wait；状态未变化时不输出新的进度消息，也不立即执行相同 poll。工具支持 cursor 时复用 cursor，只有状态变化、需要纠偏或 worker 完成时再更新用户。
 6. 需要补充信息或纠偏时，优先继续指导同一个子智能体，不重复拉起新的执行者。
 7. 子智能体返回后，主智能体检查实际改动、测试结果和验收标准；不要未经核验直接转述其结论。
 8. 若验收失败，把具体缺陷和期望结果发回同一个子智能体修正，然后再次检查。默认只做与失败证据直接相关的 bounded correction，不进入无限 review/fix 循环。若缺少只有用户能决定的信息，再向用户询问。
@@ -63,6 +70,9 @@ Context handoff must never activate this Skill implicitly. Fresh-root lifecycle 
 - 默认只拉起一个 Terra High 执行者。只有用户明确要求并行，或任务存在多个真正独立且并行收益明显的子任务时，才增加子智能体。
 - 不把当前下一步立即依赖的 critical-path reasoning 委派出去后原地等待；这类判断优先留在主智能体。
 - 不使用线程 Handoff 来监督普通 `$sub-agent` 工作流；通过等待、跟进指令和验收完成监督。
+- worker 属于创建它的当前任务。worker 仍在运行时，主智能体不得先 handoff
+  再在新任务中拉起重复 worker；应先收集稳定结果，或有意识地终止并记录
+  partial result，然后才能进行 fresh-root handoff。
 - 不主动新建 `AGENTS.md`、`PLAN.md`、`HANDOFF.md` 或其他过程文档。仅在用户明确要求、现有项目规则把它列为交付物，或 `context-handoff` 生命周期工作流明确要求 checkpoint 时创建。
 - 不因调用本 Skill 而扩大文件、服务器、账户或外部系统的授权范围。
 - 破坏性操作、生产环境变更、凭据使用和对外发布仍遵循当前任务的批准与安全边界。
@@ -71,6 +81,10 @@ Context handoff must never activate this Skill implicitly. Fresh-root lifecycle 
 
 - `$sub-agent`：解决“谁来执行”，只在显式请求时启动 Sol–Terra 编排。
 - `context-handoff`：解决“当前主上下文是否应该继续承载任务”。
-- Guardian 触发 handoff **不等于自动启用 `$sub-agent`**。
+- Guardian 触发 handoff 本身不会创造 `$sub-agent` 授权；但同一任务中由用户
+  显式开启的授权会通过有效 checkpoint 继承。
 - 对 Sol 主对话，context handoff 始终表示 `old Sol root → fresh Sol root`。
-- Terra 只会因为本 Skill 的显式 delegation 条件而出现，不会因为 compaction 或 handoff 自动出现。
+- 新 root 先恢复主智能体职责并读取 worker 状态：已有完成结果则先验收；
+  没有活跃 worker 且授权范围内仍有适合 Terra 的工作时，才拉起一个 worker。
+- Terra 只会因为原始用户的显式 delegation 条件而出现，不会仅因为 compaction
+  自动出现。

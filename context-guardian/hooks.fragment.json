@@ -1,5 +1,5 @@
 {
-  "description": "Context Guardian v3.2: PostCompact counting + Stop handoff gate + repetition signals.",
+  "description": "Context Guardian v3.3: compaction counting + acknowledged Stop handoff gate + bounded repetition signals.",
   "hooks": {
     "PostCompact": [
       {

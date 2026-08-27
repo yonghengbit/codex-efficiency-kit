@@ -1,6 +1,8 @@
 {
   "soft_compactions": 2,
   "hard_compactions": 3,
+  "max_handoff_attempts": 2,
   "repeat_threshold": 3,
+  "max_state_entries": 256,
   "track_repetition_after_compaction": true
 }

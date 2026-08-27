@@ -25,7 +25,11 @@ implementations unless the task requires them.
 
 ## Delegation
 
-Do not spawn subagents unless the user explicitly requests delegation.
+Do not spawn subagents unless the user explicitly requests delegation. A fresh
+root may continue that authorization only when a same-task handoff checkpoint
+records `WORKFLOW_MODE: sub-agent`, `DELEGATION_ORIGIN: explicit-user`, and a
+bounded `DELEGATION_SCOPE`. The inherited authorization expires with the
+original task or when the user changes or cancels it.
 
 Context handoff is never delegation. Never use `spawn_agent`, multi-agent
 workers, side chats, Terra, or Luna as a substitute for a fresh root/thread.
@@ -35,6 +39,10 @@ closed and report the handoff as blocked.
 When delegation is explicitly active, keep critical decisions and final
 acceptance in the parent, give workers bounded scopes, and do not duplicate
 the worker's task in the parent.
+
+Do not hand off a root while one of its workers is still running. Collect a
+stable result or deliberately stop it and record the partial result before
+creating the replacement root; never create a duplicate worker after handoff.
 
 ## Validation
 
