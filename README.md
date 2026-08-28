@@ -11,7 +11,7 @@
   - `repo-explore`：追踪大型代码库中的调用链、状态流或生命周期；
   - `targeted-debug`：以可证伪假设定位具体故障；
   - `minimal-review`：对当前 diff 做有界、可执行的审查；
-  - `sub-agent`：在用户显式要求时使用 Sol 规划/验收与 Terra 执行，并在同一未完成任务的 fresh-root handoff 中安全继承该授权；
+  - `sub-agent`：在用户显式要求时使用 Sol 规划/验收与 Luna 执行，并在同一未完成任务的 fresh-root handoff 中安全继承该授权；
   - `context-handoff`：在上下文退化时创建同模型的新根任务继续工作。
 - Context Guardian：通过 Codex hooks 记录 compaction、检测 compaction 后的重复工具操作，并在任务准备结束时提示必要的上下文交接。
 
@@ -94,7 +94,7 @@ $sub-agent
 实现这个有边界的改动，完成 targeted validation。
 ```
 
-`$sub-agent` 是显式委派；普通任务不会自动创建子智能体。若同一未完成任务需要 fresh-root handoff，checkpoint 会保存原始用户的委派授权、作用域和 worker 状态。新主任务继续该 Skill，但已有 worker 结果会先由 Sol 验收，不会无条件重复拉起 Terra。授权在原任务完成、用户切换任务或取消委派时失效。
+`$sub-agent` 是显式委派；普通任务不会自动创建子智能体。若同一未完成任务需要 fresh-root handoff，checkpoint 会保存原始用户的委派授权、作用域和 worker 状态。新主任务继续该 Skill，但已有 worker 结果会先由 Sol 验收，不会无条件重复拉起 Luna。授权在原任务完成、用户切换任务或取消委派时失效。
 
 ## Context Guardian 与 handoff
 
