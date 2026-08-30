@@ -1,31 +1,31 @@
 ---
 name: sub-agent
-description: 使用当前主智能体规划和验收，并在当前任务内拉起 Luna Max 子智能体执行；当用户调用 `$sub-agent`、要求使用默认子智能体工作流、明确要求委派，或同一未完成任务的有效 handoff checkpoint 记录了原始用户的显式委派授权时使用。若没有具体任务，先询问任务；不要自行猜测或主动委派。
+description: 使用当前主智能体规划和验收，并在当前任务内优先拉起 Luna Max 子智能体执行；运行时不支持时按有界规则回退。用户调用 `$sub-agent`、要求使用默认子智能体工作流、明确要求委派，或同一未完成任务的有效 handoff checkpoint 记录了原始用户的显式委派授权时使用。若没有具体任务，先询问任务；不要自行猜测或主动委派。
 ---
 
 # Sub-agent
 
-把当前主智能体作为规划者和验收者，把一个 `gpt-5.6-luna`、`max` 推理强度的子智能体作为默认执行者。此工作流假设用户已在界面选择 Sol High 作为当前主智能体；不要声称 Skill 能切换已经运行的主模型。
+把当前主智能体作为规划者和验收者，优先把一个 `gpt-5.6-luna`、`max` 推理强度的子智能体作为执行者；运行时不支持该组合时，按下文的兼容规则有界回退。此工作流假设用户已在界面选择 Sol High 作为当前主智能体；不要声称 Skill 能切换已经运行的主模型。
 
 这个 Skill 是**显式编排工作流**，不是全局自动路由器。普通任务不要因为 Luna 更便宜就主动拉起子智能体。
 
 Context handoff must never create delegation authority. It may preserve this
 Skill as the active workflow when the same unfinished task's checkpoint records
 that the original user explicitly authorized it. Fresh-root lifecycle switching
-and Luna worker delegation remain separate mechanisms.
+and worker delegation remain separate mechanisms.
 
 ## 启动条件
 
-- 仅在用户显式调用 `$sub-agent`、要求使用默认 Sol–Luna 工作流，或明确要求拉起/委派子智能体时启动。
+- 仅在用户显式调用 `$sub-agent`、要求使用默认 Sol–worker 工作流，或明确要求拉起/委派子智能体时启动。
 - 同一未完成任务发生 context handoff 时，若 checkpoint 同时记录
   `WORKFLOW_MODE: sub-agent`、`DELEGATION_ORIGIN: explicit-user` 和明确的
   `DELEGATION_SCOPE`，新主智能体应继承本 Skill。该授权在原任务完成、用户
   开始新任务、用户取消委派或 checkpoint 无法证明原始授权时失效。
 - 若用户没有给出可执行的具体任务，只问：“要让子智能体完成什么任务？”不要拉起智能体，也不要猜测任务、模型或目标。
-- 若任务已经明确，直接开始，不要再次询问模型；默认执行者就是 Luna Max。
+- 若任务已经明确，直接开始，不要再次询问模型；默认优先执行者是 Luna Max，兼容回退不需要额外询问。
 - 用户明确指定的模型、推理强度、并发方式或执行边界优先于本 Skill 的默认值。
 
-## Sol–Luna 路由原则
+## Sol–worker 路由原则
 
 本 Skill 启动后，按以下职责划分工作，而不是把所有思考都转交 Luna。
 
@@ -35,22 +35,28 @@ and Luna worker delegation remain separate mechanisms.
 - root-cause 综合判断和跨模块 invariant；
 - 对子智能体结果的最终核验与集成判断。
 
-优先交给 Luna Max：
+优先交给执行 worker：
 - 边界明确的实现和机械性代码修改；
 - 独立的 symbol/caller/reference 搜索与证据收集；
 - 有明确输入输出的局部调试或验证；
 - targeted tests、lint/typecheck 等约定好的验证；
 - 彼此独立、文件/模块不冲突且并行收益明显的工作单元。
 
-不要为了“使用子智能体”而制造子任务。若一个步骤明显比“描述任务 → 委派 → 等待 → 集成”更便宜地由主智能体直接完成，主智能体应保留该步骤；但用户明确要求由 Luna 完成的执行工作除外。
+不要为了“使用子智能体”而制造子任务。若一个步骤明显比“描述任务 → 委派 → 等待 → 集成”更便宜地由主智能体直接完成，主智能体应保留该步骤；但用户明确要求由子智能体完成的执行工作除外。
+
+## 模型兼容
+
+- 首选 `gpt-5.6-luna`、`max`。若当前拉起工具明确列出该模型与推理组合，直接使用；不要额外访问网络或模型目录做探测。
+- 若当前工具未列出 Luna Max，使用它明确支持的 `gpt-5.6-terra`、`high`；若 Terra High 也未列出，则省略 model 和 reasoning override，使用运行时默认值。
+- 若 Luna Max 拉起请求明确返回 model 或 reasoning combination unsupported/unavailable，且没有返回任何 worker 标识，只允许重试一次：优先 Terra High，否则省略 override。
+- 鉴权、网络、额度、超时或含糊错误不得触发模型回退。响应一旦返回 worker 标识，即使后续失败也不得通过回退创建重复 worker。
+- 发生回退或运行时无法保证实际模型时，简短告知用户实际选择或限制；不得声称执行者一定是 Luna Max。
+- 用户明确指定的模型与推理强度始终优先；其指定组合不受本节的自动回退规则替换。
 
 ## 工作流
 
 1. 主智能体先理解任务，形成简洁的执行计划、范围边界和可验证的验收标准。只澄清会实质改变结果且无法从项目中查明的信息。
-2. 在当前任务中拉起一个子智能体，不创建新的顶层任务或独立对话。若接口支持显式 model override，默认请求：
-   - `model`: `gpt-5.6-luna`
-   - `reasoning_effort`: `max`
-   若运行时不暴露或不保证 model override，不要声称实际子智能体一定是 Luna Max；按运行时能力执行并在结果中说明限制。
+2. 在当前任务中拉起一个子智能体，不创建新的顶层任务或独立对话。按照“模型兼容”选择 model 和 reasoning override；不重复探测，不在结果不明确时创建第二个 worker。
 3. 如果拉起接口支持控制继承上下文，优先不继承完整对话。向子智能体发送一份自包含的执行简报，其中包括：
    - 目标与非目标；
    - 主智能体的执行计划；
@@ -67,7 +73,7 @@ and Luna worker delegation remain separate mechanisms.
 
 ## 编排边界
 
-- 默认只拉起一个 Luna Max 执行者。只有用户明确要求并行，或任务存在多个真正独立且并行收益明显的子任务时，才增加子智能体。
+- 默认只拉起一个执行者。只有用户明确要求并行，或任务存在多个真正独立且并行收益明显的子任务时，才增加子智能体。
 - 不把当前下一步立即依赖的 critical-path reasoning 委派出去后原地等待；这类判断优先留在主智能体。
 - 不使用线程 Handoff 来监督普通 `$sub-agent` 工作流；通过等待、跟进指令和验收完成监督。
 - worker 属于创建它的当前任务。worker 仍在运行时，主智能体不得先 handoff
@@ -79,12 +85,12 @@ and Luna worker delegation remain separate mechanisms.
 
 ## 与 Context Guardian 的关系
 
-- `$sub-agent`：解决“谁来执行”，只在显式请求时启动 Sol–Luna 编排。
+- `$sub-agent`：解决“谁来执行”，只在显式请求时启动 Sol–worker 编排；Luna Max 是首选而不是无条件假设。
 - `context-handoff`：解决“当前主上下文是否应该继续承载任务”。
 - Guardian 触发 handoff 本身不会创造 `$sub-agent` 授权；但同一任务中由用户
   显式开启的授权会通过有效 checkpoint 继承。
 - 对 Sol 主对话，context handoff 始终表示 `old Sol root → fresh Sol root`。
 - 新 root 先恢复主智能体职责并读取 worker 状态：已有完成结果则先验收；
-   没有活跃 worker 且授权范围内仍有适合 Luna 的工作时，才拉起一个 worker。
-- Luna 只会因为原始用户的显式 delegation 条件而出现，不会仅因为 compaction
-  自动出现。
+   没有活跃 worker 且授权范围内仍有适合执行者的工作时，才拉起一个 worker。
+- 执行 worker 只会因为原始用户的显式 delegation 条件而出现，不会仅因为
+  compaction 自动出现。

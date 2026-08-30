@@ -2,16 +2,16 @@
 
 一个可独立安装的 Codex 本地效率配置包，用于减少无关重构、重复探索和长任务中的上下文漂移。
 
-> 版本：3.3.0。该项目是个人配置包，不是 OpenAI 官方产品或官方推荐配置。
+> 版本：3.4.0。该项目是个人配置包，不是 OpenAI 官方产品或官方推荐配置。
 
 ## 功能
 
-- 全局工程规则：优先最小完整改动、复用既有模式、限制无关重构，并使用最小相关验证。
+- 全局工程规则：优先最小完整改动、复用既有模式、限制无关重构，使用最小相关验证，并为长任务维护单一状态台账和明确的证据等级。
 - 定向工作流 skills：
   - `repo-explore`：追踪大型代码库中的调用链、状态流或生命周期；
   - `targeted-debug`：以可证伪假设定位具体故障；
   - `minimal-review`：对当前 diff 做有界、可执行的审查；
-  - `sub-agent`：在用户显式要求时使用 Sol 规划/验收与 Luna 执行，并在同一未完成任务的 fresh-root handoff 中安全继承该授权；
+  - `sub-agent`：在用户显式要求时使用 Sol 规划/验收，优先使用 Luna Max 执行；运行时不支持时有界回退到 Terra High 或运行时默认模型，并在同一未完成任务的 fresh-root handoff 中安全继承该授权；
   - `context-handoff`：在上下文退化时创建同模型的新根任务继续工作。
 - Context Guardian：通过 Codex hooks 记录 compaction、检测 compaction 后的重复工具操作，并在任务准备结束时提示必要的上下文交接。
 
@@ -94,7 +94,7 @@ $sub-agent
 实现这个有边界的改动，完成 targeted validation。
 ```
 
-`$sub-agent` 是显式委派；普通任务不会自动创建子智能体。若同一未完成任务需要 fresh-root handoff，checkpoint 会保存原始用户的委派授权、作用域和 worker 状态。新主任务继续该 Skill，但已有 worker 结果会先由 Sol 验收，不会无条件重复拉起 Luna。授权在原任务完成、用户切换任务或取消委派时失效。
+`$sub-agent` 是显式委派；普通任务不会自动创建子智能体。执行模型首选 Luna Max；当前拉起工具未列出该组合时使用 Terra High，再不支持则使用运行时默认模型。只有明确的 model/reasoning unsupported 且没有创建 worker 时才允许一次回退；鉴权、网络、额度和含糊错误不会被伪装成模型兼容问题。若同一未完成任务需要 fresh-root handoff，checkpoint 会保存原始用户的委派授权、作用域和 worker 状态。新主任务继续该 Skill，但已有 worker 结果会先由 Sol 验收，不会无条件重复拉起 worker。授权在原任务完成、用户切换任务或取消委派时失效。
 
 ## Context Guardian 与 handoff
 

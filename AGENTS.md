@@ -23,6 +23,12 @@ reasoning/tool turns for mechanically determined steps that can run together.
 Do not inspect git history, perform broad repository audits, or explore sibling
 implementations unless the task requires them.
 
+For long-running tasks with multiple phases, handoffs, or remote runs, maintain
+one canonical status ledger. Prefer an existing plan, status, or handoff
+artifact; do not duplicate the same state across multiple process documents.
+Keep the hard acceptance gates, established evidence, blockers, untested items,
+and next concrete action current in that ledger.
+
 ## Delegation
 
 Do not spawn subagents unless the user explicitly requests delegation. A fresh
@@ -55,6 +61,12 @@ dependencies, runtime state, or environment changed.
 Do not add tests, retries, compatibility layers, or validation infrastructure
 solely to gain more confidence when the requested behavior is already adequately
 verified.
+
+Classify material validation conclusions as `VERIFIED`, `INFERRED`, `BLOCKED`,
+or `UNTESTED`: direct evidence, reasoned but untested expectation, validation
+prevented by a concrete blocker, or validation not attempted. Do not describe
+behavior as passed, supported, complete, or issue-free beyond the scope directly
+established by the available evidence.
 
 ## Decision Discipline
 
