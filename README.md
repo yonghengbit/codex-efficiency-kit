@@ -2,11 +2,12 @@
   <img src="./assets/hero.png" alt="Codex Efficiency Kit — Do less. Stay in scope. Preserve context." width="100%" />
 
   <p><strong>让 Codex 把上下文和算力用在真正需要的地方。</strong></p>
-  <p>一套可独立安装的工程规则、定向 Skills 与上下文生命周期守护工具。</p>
+  <p>以 <code>$sub-agent</code> 为主轴的工程规则、定向 Skills 与上下文生命周期守护工具。</p>
 
   <p>
     <img alt="version 3.5.0" src="https://img.shields.io/badge/version-3.5.0-111820?style=flat-square" />
     <img alt="for Codex" src="https://img.shields.io/badge/for-Codex-16E85D?style=flat-square&labelColor=111820" />
+    <img alt="sub-agent first" src="https://img.shields.io/badge/mode-sub--agent%20first-16E85D?style=flat-square&labelColor=111820" />
     <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-D8DEE9?style=flat-square&labelColor=111820" />
     <img alt="stdlib only" src="https://img.shields.io/badge/runtime-stdlib%20only-8A99A8?style=flat-square&labelColor=111820" />
   </p>
@@ -14,6 +15,9 @@
 
 > [!NOTE]
 > Codex Efficiency Kit（CEK）是独立社区项目，不是 OpenAI 官方产品或官方推荐配置。
+
+> [!IMPORTANT]
+> **CEK 主推 `$sub-agent` 模式。** 由主智能体负责拆解、范围控制和最终验收，由 worker 执行有边界的实现与验证；普通任务不会未经用户授权自动拉起子智能体。
 
 ## CEK 解决什么问题？
 
@@ -30,12 +34,13 @@ CEK 为这些行为增加明确边界：
 
 > **Do less. Stay in scope. Preserve context.**
 
-## 三层工作模型
+## 工作模型：Sub-agent 主轴，Guardian 托底
 
 | 层级 | 作用 | 关键约束 |
 | --- | --- | --- |
-| **Global Engineering Rules** | 约束所有工程任务的范围、探索和验证成本 | 最小完整改动；复用现有模式；拒绝无关重构；满足停止条件后立即结束 |
-| **Focused Skills** | 为特定任务提供有界流程 | 只在匹配场景下启用；一次解决当前问题；主任务保留最终验收责任 |
+| **`$sub-agent` / Sol–worker** | CEK 的主工作模式：主智能体规划和验收，worker 执行局部任务 | 必须有用户明确授权；限定 write scope；不重复创建 worker；主智能体保留关键决策 |
+| **Global Engineering Rules** | 约束主任务与 worker 的范围、探索和验证成本 | 最小完整改动；复用现有模式；拒绝无关重构；满足停止条件后立即结束 |
+| **Focused Skills** | 为探索、调试和审查等局部任务提供有界流程 | 只在匹配场景下启用；一次解决当前问题；结果回到主智能体验收 |
 | **Context Guardian** | 管理长任务的上下文生命周期 | 记录 compaction；检测重复动作；必要时要求同主模型、同推理强度的 fresh-root handoff |
 
 ### 内置 Skills
@@ -45,14 +50,14 @@ CEK 为这些行为增加明确边界：
 | `$repo-explore` | 追踪调用链、状态流、所有权或生命周期 | 从具体锚点出发，只展开回答问题所需的最短路径 |
 | `$targeted-debug` | 修复可观察的错误、崩溃、竞态或回归 | 逐个验证可证伪假设，确认 root cause 后做最小修复 |
 | `$minimal-review` | 审查当前 diff 或 patch | 只报告具体、可执行的问题，不把 review 扩成仓库审计 |
-| `$sub-agent` | 用户明确授权委派 | 主智能体规划和验收，worker 执行有界实现与验证 |
+| **`$sub-agent`** | **CEK 主推：用户明确授权委派** | **主智能体规划和验收，worker 执行有界实现与验证** |
 | `$context-handoff` | Guardian 判断当前 root 已退化 | 将已确认状态交给全新同模型 root，不用 fork 或 worker 冒充 fresh context |
 
 普通任务无需手动调用 Skill；当你希望强制使用某个流程时再显式调用。
 
-## Sol–worker：最高可用强度，而不是硬编码 Max
+## 主推模式：Sol–worker / `$sub-agent`
 
-`$sub-agent` 只在用户明确授权时启动。主智能体负责范围、关键决策和最终验收，默认执行者按当前接口能力有界选择：
+`$sub-agent` 是 CEK 的主推工作模式，但只在用户明确授权时启动。主智能体负责需求解释、范围、关键决策和最终验收；worker 负责有界实现、局部调查和 targeted validation。默认执行者按当前接口能力有界选择：
 
 ```text
 Luna Max
@@ -91,6 +96,17 @@ Checkpoint 会记录源任务的精确主模型与 `PRIMARY_REASONING_EFFORT`。
 - handoff 不会凭空创建子智能体授权，但可以继承同一未完成任务中用户已明确授予的 bounded delegation scope。
 
 ## Quick Start
+
+### 推荐入口：从 `$sub-agent` 开始
+
+如果任务适合拆成一个清晰的执行单元，推荐直接显式调用 `$sub-agent`：
+
+```text
+$sub-agent
+由主智能体规划和验收。请让 worker 在限定范围内完成这个改动，并运行最小相关验证。
+```
+
+主智能体不会把需求解释、架构取舍或最终验收外包给 worker；worker 的结果必须回到主任务核验。若任务不适合委派，直接执行即可。
 
 ### Requirements
 
@@ -133,6 +149,15 @@ python3 install.py --no-backup
 
 ## 使用示例
 
+### 主推：委派一个有边界的执行单元
+
+```text
+$sub-agent
+实现这个有边界的改动：只修改指定模块，由主智能体完成最终验收，并运行 targeted validation。
+```
+
+### 其他定向 Skills
+
 ```text
 $repo-explore
 从 handle_request 开始，追踪请求进入 prefill batch 的最小调用链。
@@ -146,11 +171,6 @@ $targeted-debug
 ```text
 $minimal-review
 审查当前 diff，只报告会影响合并的具体问题。
-```
-
-```text
-$sub-agent
-实现这个有边界的改动，由主智能体验收。
 ```
 
 `$context-handoff` 通常由 Context Guardian 在长任务上下文退化时触发，不应拿来替代普通委派。
