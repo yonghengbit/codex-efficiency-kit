@@ -1,44 +1,107 @@
-# Codex Efficiency Kit
+<div align="center">
+  <img src="./assets/hero.png" alt="Codex Efficiency Kit — Do less. Stay in scope. Preserve context." width="100%" />
 
-一个可独立安装的 Codex 本地效率配置包，用于减少无关重构、重复探索和长任务中的上下文漂移。
+  <p><strong>让 Codex 把上下文和算力用在真正需要的地方。</strong></p>
+  <p>一套可独立安装的工程规则、定向 Skills 与上下文生命周期守护工具。</p>
 
-> 版本：3.4.0。该项目是个人配置包，不是 OpenAI 官方产品或官方推荐配置。
+  <p>
+    <img alt="version 3.5.0" src="https://img.shields.io/badge/version-3.5.0-111820?style=flat-square" />
+    <img alt="for Codex" src="https://img.shields.io/badge/for-Codex-16E85D?style=flat-square&labelColor=111820" />
+    <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-D8DEE9?style=flat-square&labelColor=111820" />
+    <img alt="stdlib only" src="https://img.shields.io/badge/runtime-stdlib%20only-8A99A8?style=flat-square&labelColor=111820" />
+  </p>
+</div>
 
-## 功能
+> [!NOTE]
+> Codex Efficiency Kit（CEK）是独立社区项目，不是 OpenAI 官方产品或官方推荐配置。
 
-- 全局工程规则：优先最小完整改动、复用既有模式、限制无关重构，使用最小相关验证，并为长任务维护单一状态台账和明确的证据等级。
-- 定向工作流 skills：
-  - `repo-explore`：追踪大型代码库中的调用链、状态流或生命周期；
-  - `targeted-debug`：以可证伪假设定位具体故障；
-  - `minimal-review`：对当前 diff 做有界、可执行的审查；
-  - `sub-agent`：在用户显式要求时使用 Sol 规划/验收，优先使用 Luna Max 执行；运行时不支持时有界回退到 Terra High 或运行时默认模型，并在同一未完成任务的 fresh-root handoff 中安全继承该授权；
-  - `context-handoff`：在上下文退化时创建同模型的新根任务继续工作。
-- Context Guardian：通过 Codex hooks 记录 compaction、检测 compaction 后的重复工具操作，并在任务准备结束时提示必要的上下文交接。
+## CEK 解决什么问题？
 
-## 独立性与边界
+Codex 的成本经常浪费在任务之外：为了一个局部事实重新扫描仓库、bug 尚未定位就展开多条猜测、小改动结束后继续 cleanup 和 full-suite validation，或在多次 compaction 后重复已经完成的调查。
 
-本仓库可单独安装：安装脚本和 Guardian 仅使用 Python 标准库，不需要任何旧版 Kit、第三方 Python 包或项目依赖。
+CEK 为这些行为增加明确边界：
 
-它会修改当前 Codex home（默认 `~/.codex`）中的：
+```text
+理解请求 → 最小完整范围 → 需要时启用定向 Skill → 最小相关验证 → 停止
+                         ↘ Context Guardian 监控上下文退化 ↗
+```
 
-- `AGENTS.md`：只替换 `CODEX EFFICIENCY KIT` 标记区间；
-- `skills/`：安装或更新本仓库提供的五个 skills；
-- `context-guardian/`：安装 Guardian 脚本和默认配置；
-- `hooks.json`：合并 Guardian 的 hooks，不删除非 Guardian hooks。
+它不尝试把每个任务变成复杂工作流，也不会替 Codex 增加一个自动路由层。核心目标只有三个：
 
-安装器默认在覆盖已有规则、skills、Guardian 脚本或 hooks 前，把备份写入 `~/.codex/backups/<timestamp>/`；备份 Skill 不会留在活动的 `skills/` 目录中。已有 Guardian `config.json` 不会被覆盖。个人环境明确不需要备份时可使用 `--no-backup`。
+> **Do less. Stay in scope. Preserve context.**
 
-## 要求
+## 三层工作模型
 
-- 已安装 Codex；
-- Python 3（Windows 可使用 Python Launcher 的 `py -3`）；
-- Codex hooks 已启用，并允许在 `/hooks` 中审核和信任本仓库新增的 hooks。
+| 层级 | 作用 | 关键约束 |
+| --- | --- | --- |
+| **Global Engineering Rules** | 约束所有工程任务的范围、探索和验证成本 | 最小完整改动；复用现有模式；拒绝无关重构；满足停止条件后立即结束 |
+| **Focused Skills** | 为特定任务提供有界流程 | 只在匹配场景下启用；一次解决当前问题；主任务保留最终验收责任 |
+| **Context Guardian** | 管理长任务的上下文生命周期 | 记录 compaction；检测重复动作；必要时要求同主模型、同推理强度的 fresh-root handoff |
 
-`context-handoff` 还需要运行环境提供第一方的“创建新任务 / 发送继续消息 / 查看任务状态”能力。没有这些能力时，它会明确报告 handoff blocked；不会用 fork、子智能体、Terra 或 Luna 冒充新的同模型根上下文。
+### 内置 Skills
 
-## 安装
+| Skill | 适用场景 | 行为重点 |
+| --- | --- | --- |
+| `$repo-explore` | 追踪调用链、状态流、所有权或生命周期 | 从具体锚点出发，只展开回答问题所需的最短路径 |
+| `$targeted-debug` | 修复可观察的错误、崩溃、竞态或回归 | 逐个验证可证伪假设，确认 root cause 后做最小修复 |
+| `$minimal-review` | 审查当前 diff 或 patch | 只报告具体、可执行的问题，不把 review 扩成仓库审计 |
+| `$sub-agent` | 用户明确授权委派 | 主智能体规划和验收，worker 执行有界实现与验证 |
+| `$context-handoff` | Guardian 判断当前 root 已退化 | 将已确认状态交给全新同模型 root，不用 fork 或 worker 冒充 fresh context |
 
-克隆仓库后运行安装器：
+普通任务无需手动调用 Skill；当你希望强制使用某个流程时再显式调用。
+
+## Sol–worker：最高可用强度，而不是硬编码 Max
+
+`$sub-agent` 只在用户明确授权时启动。主智能体负责范围、关键决策和最终验收，默认执行者按当前接口能力有界选择：
+
+```text
+Luna Max
+  └─ max 不可用 → Luna XHigh
+       └─ Luna XHigh 不可用 → Terra High
+            └─ 仍不可用 → 运行时默认模型/强度
+```
+
+- 当前拉起工具明确支持 Luna Max 时，直接使用 Max；
+- API 最高只提供 `xhigh` 时，保持 Luna，不因缺少 `max` 直接换模型；
+- 只有明确的 model/reasoning combination unsupported 且尚未创建 worker，才允许一次兼容回退；
+- 鉴权、网络、额度、超时或含糊错误不会触发重复 worker；
+- 用户明确指定的模型或推理强度始终优先。
+
+> `$sub-agent` 决定“谁来执行”；它不负责把退化的主上下文换成新上下文。
+
+## Handoff：Sol High 必须仍然是 Sol High
+
+`$context-handoff` 处理的是主任务上下文生命周期：
+
+```text
+old Sol root
+  → .codex/CODEX_HANDOFF.md
+  → brand-new Sol root（无复制历史）
+  → 立即继续 NEXT_ACTION
+```
+
+Checkpoint 会记录源任务的精确主模型与 `PRIMARY_REASONING_EFFORT`。当源强度已知时，创建 replacement root 必须显式传入相同的 thinking/reasoning 参数，不能省略后依赖运行时默认值。因此 **Sol High 交接后仍应是 Sol High**，而不是静默变成 Medium。
+
+交接遵循 fail-closed：
+
+- 新任务必须是 brand-new root，`fork_thread` 不算 fresh context；
+- 模型不匹配时报告 `MODEL_MISMATCH`；
+- 已知推理强度无法保留或可观测值不匹配时报告 `REASONING_MISMATCH`；
+- 新 root 必须收到 continuation 并实际开始执行，旧 root 才能结束；
+- handoff 不会凭空创建子智能体授权，但可以继承同一未完成任务中用户已明确授予的 bounded delegation scope。
+
+## Quick Start
+
+### Requirements
+
+- 已安装并可以正常使用 Codex；
+- Python 3.10+（安装器与 Guardian 仅使用标准库）；
+- Codex hooks 可用，并允许在 `/hooks` 中审核和信任新增 hooks；
+- Git（用于克隆仓库）。
+
+### Install
+
+Linux / macOS：
 
 ```bash
 git clone https://github.com/yonghengbit/codex-efficiency-kit.git
@@ -54,49 +117,59 @@ cd codex-efficiency-kit
 py -3 .\install.py
 ```
 
-若 Codex home 不在默认位置：
+自定义 Codex home：
 
 ```bash
 python3 install.py --codex-home /path/to/.codex
 ```
 
-明确不需要备份时：
+安装器默认在覆盖已有内容前创建时间戳备份。仅在明确不需要备份时使用：
 
 ```bash
 python3 install.py --no-backup
 ```
 
-安装完成后，打开 Codex 的 `/hooks`，审核并信任新增的 `PostCompact`、`Stop` 和 `PostToolUse` Guardian hooks，然后开始一个新任务。
+安装完成后，打开 Codex 的 `/hooks`，审核并信任 CEK 新增的 `PostCompact`、`PostToolUse` 和 `Stop` hooks，然后开始一个新任务。
 
-## 使用
-
-日常编码不需要显式调用 skill。全局规则会默认约束范围、探索和验证成本。
-
-在需要特定流程时显式调用：
+## 使用示例
 
 ```text
-@repo-explore
+$repo-explore
 从 handle_request 开始，追踪请求进入 prefill batch 的最小调用链。
 ```
 
 ```text
-@targeted-debug
-这个请求在并发时首 token 变成 EOS。请从实际计算路径找 root cause。
+$targeted-debug
+并发请求的首 token 偶尔变成 EOS。请定位 root cause 并做 targeted validation。
 ```
 
 ```text
-@minimal-review
-review 当前 diff。
+$minimal-review
+审查当前 diff，只报告会影响合并的具体问题。
 ```
 
 ```text
 $sub-agent
-实现这个有边界的改动，完成 targeted validation。
+实现这个有边界的改动，由主智能体验收。
 ```
 
-`$sub-agent` 是显式委派；普通任务不会自动创建子智能体。执行模型首选 Luna Max；当前拉起工具未列出该组合时使用 Terra High，再不支持则使用运行时默认模型。只有明确的 model/reasoning unsupported 且没有创建 worker 时才允许一次回退；鉴权、网络、额度和含糊错误不会被伪装成模型兼容问题。若同一未完成任务需要 fresh-root handoff，checkpoint 会保存原始用户的委派授权、作用域和 worker 状态。新主任务继续该 Skill，但已有 worker 结果会先由 Sol 验收，不会无条件重复拉起 worker。授权在原任务完成、用户切换任务或取消委派时失效。
+`$context-handoff` 通常由 Context Guardian 在长任务上下文退化时触发，不应拿来替代普通委派。
 
-## Context Guardian 与 handoff
+## 安装器如何保护现有配置
+
+默认安装目标是 `~/.codex`：
+
+| 路径 | 安装行为 |
+| --- | --- |
+| `AGENTS.md` | 只创建或替换 `CODEX EFFICIENCY KIT` 标记区间，保留区间外内容 |
+| `skills/` | 安装或更新 CEK 提供的五个 Skills |
+| `context-guardian/` | 更新 Guardian 脚本；已有 `config.json` 不覆盖 |
+| `hooks.json` | 合并 Guardian hooks，不删除非 Guardian hooks |
+| `backups/<timestamp>/` | 默认保存被替换的规则、Skills、脚本和 hooks |
+
+这让 CEK 可以叠加到已有个人配置上，而不要求接管整个 Codex home。
+
+## Context Guardian
 
 默认阈值位于 `~/.codex/context-guardian/config.json`：
 
@@ -111,39 +184,61 @@ $sub-agent
 }
 ```
 
-- `PostCompact` 记录当前会话的 compaction 次数并给出简短的防重复提醒；
-- `PostToolUse` 在 compaction 后检测相同工具动作或路径是否反复出现，忽略 wait、Agent 生命周期、写入工具和明确失败的调用；drift 信号只提醒模型避免重复工作，不会改变 handoff 状态或提前触发交接；
-- `Stop` 会在 soft/hard 阈值时阻止未完成任务直接结束，并要求执行 `context-handoff`；只有交接已验证、任务已完成或阻塞已明确记录时才放行；
-- Guardian 状态写入使用每会话文件锁和唯一临时文件，避免并行 Hook 覆盖计数。
+| Hook | 行为 |
+| --- | --- |
+| `PostCompact` | 记录 compaction 次数，并提醒保留已确认结论 |
+| `PostToolUse` | compaction 后检测重复工具动作与路径访问，发出有界 drift signal |
+| `Stop` | 未完成任务达到阈值时要求完成或明确处理 handoff gate |
 
-交接仅在以下条件全部满足时才成功：
-
-1. 已写入简洁的 `.codex/CODEX_HANDOFF.md`；
-2. 已创建无历史复制的、同主模型的新根任务；
-3. 新任务收到并开始执行 `NEXT_ACTION`；
-4. 已通过任务状态确认新任务实际启动；
-5. 旧任务已把 destination task id 作为 `verified` 结果写回 Guardian 状态。
-
-`fork_thread` 会复制已完成历史，因此不属于 fresh context。Context handoff 不会把 Terra、Luna、`$sub-agent` 或其他 worker 冒充 fresh root；但会为同一未完成任务继承原始用户已经显式授权的 `$sub-agent` 工作流。
-
-## 查看状态
+查看当前状态：
 
 ```bash
 python3 ~/.codex/context-guardian/context_guardian.py --status
 ```
 
-## 升级
+Windows：
 
-在新版本目录再次运行同一安装命令即可。安装器会更新 Kit 自己管理的规则区间、skills、Guardian 和 hooks，并保留已有 Guardian 阈值配置。
+```powershell
+py -3 "$HOME\.codex\context-guardian\context_guardian.py" --status
+```
 
-## 测试
+## Repository Layout
 
-测试只使用 Python 标准库：
+```text
+codex-efficiency-kit/
+├── assets/
+│   └── hero.png
+├── AGENTS.md
+├── VERSION
+├── install.py
+├── skills/
+│   ├── repo-explore/
+│   ├── targeted-debug/
+│   ├── minimal-review/
+│   ├── sub-agent/
+│   └── context-handoff/
+├── context-guardian/
+│   ├── context_guardian.py
+│   └── config.json
+└── tests/
+```
+
+## Upgrade & Validation
+
+更新仓库后重新运行安装器即可；它会更新 CEK 管理的规则、Skills、Guardian 和 hooks，同时保留已有 Guardian 配置。
 
 ```bash
+git pull
+python3 install.py
 python3 -m unittest discover -s tests -v
 ```
 
-## 许可证
+## Project Status & License
 
-当前仓库尚未指定开源许可证。公开可见不等于授予复制、修改或再发布许可；如需开源分发，请在后续添加明确的 `LICENSE` 文件。
+当前版本：**3.5.0**。
+
+仓库目前未提供明确的开源许可证。公开可见不自动授予复制、修改或再发布许可；如果计划接受外部贡献或正式开源分发，应补充 `LICENSE`。
+
+## Disclaimer
+
+Codex Efficiency Kit 是独立项目，与 OpenAI 不存在隶属、赞助或官方背书关系。`Codex`、`OpenAI` 及相关商标归其权利人所有；本项目使用独立的 “context loop + terminal execution” 视觉语言。
