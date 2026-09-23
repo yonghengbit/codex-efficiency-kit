@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
 from typing import Any, Callable, Iterator
@@ -337,6 +338,14 @@ def post_compact(payload: dict[str, Any], base: Path, cfg: dict[str, Any]) -> No
     }, ensure_ascii=False))
 
 
+def is_sol_primary_model(model: Any) -> bool:
+    """Only generation-specific Sol roots require a fresh-root handoff."""
+    if not isinstance(model, str):
+        return False
+    normalized = model.lower()
+    return bool(re.search(r"(?:^|[-_.])(?:gpt[-_.]?(?:5[.]6|6))[-_.]sol(?:$|[-_.])", normalized))
+
+
 def handoff_reason(state: dict[str, Any], level: str, retry: bool = False) -> str:
     session_id = state["session_id"]
     model = state.get("last_model") or "current primary model"
@@ -362,10 +371,10 @@ def stop(payload: dict[str, Any], base: Path, cfg: dict[str, Any]) -> None:
     with state_lock(base, session_id):
         state = load_state_unlocked(base, session_id)
         count = int(state.get("compactions", 0))
-        soft = cfg["soft_compactions"]
-        if count < soft:
+        if count < cfg["soft_compactions"] or not is_sol_primary_model(state.get("last_model")):
             print("{}")
             return
+        soft = cfg["soft_compactions"]
 
         turn_id = payload.get("turn_id")
         status = str(state.get("handoff_status", "idle"))

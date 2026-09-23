@@ -38,7 +38,7 @@ CEK 为这些行为增加明确边界：
 
 | 层级 | 作用 | 关键约束 |
 | --- | --- | --- |
-| **`$sub-agent` / Sol–worker** | CEK 的主工作模式：主智能体规划和验收，worker 执行局部任务 | 必须有用户明确授权；限定 write scope；不重复创建 worker；主智能体保留关键决策 |
+| **`$sub-agent` / Sol–worker** | CEK 的主工作模式：主智能体规划和验收，worker 执行局部任务 | 必须有用户明确授权；worker 与 Sol 主模型同代（GPT-6 Sol → GPT-6 Luna，GPT-5.6 Sol → GPT-5.6 Luna）；限定 write scope；主智能体保留关键决策 |
 | **Global Engineering Rules** | 约束主任务与 worker 的范围、探索和验证成本 | 最小完整改动；复用现有模式；拒绝无关重构；满足停止条件后立即结束 |
 | **Focused Skills** | 为探索、调试和审查等局部任务提供有界流程 | 只在匹配场景下启用；一次解决当前问题；结果回到主智能体验收 |
 | **Context Guardian** | 管理长任务的上下文生命周期 | 记录 compaction；检测重复动作；必要时要求同主模型、同推理强度的 fresh-root handoff |
@@ -60,30 +60,37 @@ CEK 为这些行为增加明确边界：
 `$sub-agent` 是 CEK 的主推工作模式，但只在用户明确授权时启动。主智能体负责需求解释、范围、关键决策和最终验收；worker 负责有界实现、局部调查和 targeted validation。默认执行者按当前接口能力有界选择：
 
 ```text
-Luna Max
-  └─ max 不可用 → Luna XHigh
-       └─ Luna XHigh 不可用 → Terra High
-            └─ 仍不可用 → 运行时默认模型/强度
+GPT-6 Sol
+  └─ GPT-6 Luna Max
+
+GPT-5.6 Sol
+  └─ GPT-5.6 Luna Max
 ```
 
-- 当前拉起工具明确支持 Luna Max 时，直接使用 Max；
-- API 最高只提供 `xhigh` 时，保持 Luna，不因缺少 `max` 直接换模型；
-- 只有明确的 model/reasoning combination unsupported 且尚未创建 worker，才允许一次兼容回退；
+- worker 必须与当前 Sol 主模型同代，不允许跨代委派；默认 reasoning 为 `max`；仅在同代组合明确不可用时按 Skill 规则有界回退。
+- Terra 和 Luna 不作为 context-handoff 的 root；Luna 只在用户明确授权的 Sol–worker 工作流中担任 worker。
+
+- 当前 Sol 主模型明确支持对应同代 Luna `max` 时，直接使用该组合；
+- API 最高只提供同代 `xhigh` 时，保持同代 Luna，不跨代换模型；
+- 只有明确的同代 model/reasoning combination unsupported 且尚未创建 worker，才允许一次兼容回退；
 - 鉴权、网络、额度、超时或含糊错误不会触发重复 worker；
 - 用户明确指定的模型或推理强度始终优先。
 
 > `$sub-agent` 决定“谁来执行”；它不负责把退化的主上下文换成新上下文。
 
-## Handoff：Sol High 必须仍然是 Sol High
+## Handoff：同代 Sol High 必须仍然是 Sol High
 
 `$context-handoff` 处理的是主任务上下文生命周期：
 
 ```text
-old Sol root
-  → .codex/CODEX_HANDOFF.md
-  → brand-new Sol root（无复制历史）
-  → 立即继续 NEXT_ACTION
+GPT-6 Sol High root
+  → brand-new GPT-6 Sol High root
+
+GPT-5.6 Sol High root
+  → brand-new GPT-5.6 Sol High root
 ```
+
+交接必须保留同代、同一精确 Sol model id 和同一 reasoning effort；`Sol High → Sol High` 是硬约束。Terra/Luna root 不触发 context-handoff。
 
 Checkpoint 会记录源任务的精确主模型与 `PRIMARY_REASONING_EFFORT`。当源强度已知时，创建 replacement root 必须显式传入相同的 thinking/reasoning 参数，不能省略后依赖运行时默认值。因此 **Sol High 交接后仍应是 Sol High**，而不是静默变成 Medium。
 

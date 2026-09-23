@@ -109,6 +109,44 @@ class ContextGuardianTests(unittest.TestCase):
             "{}",
         )
 
+    def test_non_sol_roots_bypass_handoff_gate(self) -> None:
+        for model in ("gpt-6-luna", "gpt-6-terra", "gpt-5.6-luna", "gpt-7-sol", "custom-sol"):
+            payload = {
+                "hook_event_name": "PostCompact",
+                "session_id": model,
+                "model": model,
+                "cwd": str(self.base),
+            }
+            self.capture(guardian.post_compact, payload, self.base, self.cfg)
+            self.capture(guardian.post_compact, payload, self.base, self.cfg)
+            self.assertEqual(
+                self.capture(
+                    guardian.stop,
+                    {"session_id": model, "turn_id": "turn-1", "stop_hook_active": False},
+                    self.base,
+                    self.cfg,
+                ),
+                "{}",
+            )
+
+    def test_sol_generation_models_require_handoff(self) -> None:
+        for model in ("gpt-6-sol", "gpt-5.6-sol-plus"):
+            payload = {
+                "hook_event_name": "PostCompact",
+                "session_id": model,
+                "model": model,
+                "cwd": str(self.base),
+            }
+            self.capture(guardian.post_compact, payload, self.base, self.cfg)
+            self.capture(guardian.post_compact, payload, self.base, self.cfg)
+            decision = json.loads(self.capture(
+                guardian.stop,
+                {"session_id": model, "turn_id": "turn-1", "stop_hook_active": False},
+                self.base,
+                self.cfg,
+            ))
+            self.assertEqual(decision["decision"], "block")
+
     def test_drift_tracking_ignores_noise_and_does_not_trigger_handoff(self) -> None:
         payload = {
             "session_id": "tools",

@@ -31,6 +31,8 @@ and next concrete action current in that ledger.
 
 ## Delegation
 
+**Routing invariant:** GPT-6 Sol delegates only to GPT-6 Luna `max`; GPT-5.6 Sol delegates only to GPT-5.6 Luna `max`. Context handoff is Sol-only and preserves the exact same-generation model and reasoning effort (Sol High → Sol High). Terra and Luna roots do not hand off.
+
 Do not spawn subagents unless the user explicitly requests delegation. A fresh
 root may continue that authorization only when a same-task handoff checkpoint
 records `WORKFLOW_MODE: sub-agent`, `DELEGATION_ORIGIN: explicit-user`, and a

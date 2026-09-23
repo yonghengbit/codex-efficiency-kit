@@ -9,16 +9,17 @@ This skill manages context lifecycle. It does not create delegation authority,
 but it preserves an explicitly user-authorized `$sub-agent` workflow for the
 same unfinished task.
 
-For a Sol root:
+For a Sol root, handoff is strictly generation- and effort-preserving:
 
 ```text
-old Sol root
-→ .codex/CODEX_HANDOFF.md
-→ BRAND-NEW Sol root with empty conversation history
-→ continue the same task
+GPT-6 Sol High root
+→ brand-new GPT-6 Sol High root
+
+GPT-5.6 Sol High root
+→ brand-new GPT-5.6 Sol High root
 ```
 
-Do not use Terra or Luna for context handoff.
+The replacement must use the exact source Sol model id and exact source reasoning effort. In particular, `Sol High → Sol High` is mandatory; do not silently downgrade or upgrade the effort. Terra and Luna roots do not use this context-handoff workflow and must not be selected as replacement roots.
 
 ## Create, do not fork
 
