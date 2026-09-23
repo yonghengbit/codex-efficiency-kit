@@ -9,16 +9,20 @@ This skill manages context lifecycle. It does not create delegation authority,
 but it preserves an explicitly user-authorized `$sub-agent` workflow for the
 same unfinished task.
 
-For a Sol root:
+Handoff preserves the exact primary model and reasoning effort:
 
 ```text
-old Sol root
-→ .codex/CODEX_HANDOFF.md
-→ BRAND-NEW Sol root with empty conversation history
-→ continue the same task
+GPT-6 Astra High root
+→ brand-new GPT-6 Astra High root
+
+GPT-6 Sol High root
+→ brand-new GPT-6 Sol High root
+
+GPT-5.6 Sol High root
+→ brand-new GPT-5.6 Sol High root
 ```
 
-Do not use Terra or Luna for context handoff.
+The replacement must use the exact source model id and exact source reasoning effort. Do not silently downgrade or upgrade either. Guardian automatically gates the GPT-6 Astra/Sol and GPT-5.6 Sol primary models; this Skill also applies to an explicitly requested handoff from another root model. A worker is never a replacement root.
 
 ## Create, do not fork
 
@@ -52,6 +56,7 @@ DELEGATION_ORIGIN: none | explicit-user
 DELEGATION_SCOPE:
 DELEGATION_EXPIRES_AT:
 ACTIVE_WORKER_STATE: none | running | completed | failed
+ACTIVE_WORKER_MODEL:
 ACTIVE_WORKER_SCOPE:
 WORKER_RESULT:
 GOAL:
@@ -68,6 +73,12 @@ STOP_CONDITION:
 
 Never write passwords, tokens, private keys, or complete credentials into the
 checkpoint. Reference their approved secure location instead.
+
+`PRIMARY_MODEL` always describes the old root and the required replacement
+root. `ACTIVE_WORKER_MODEL` records an existing worker's model, if any; never
+copy it or a worker preference into `PRIMARY_MODEL`. When the user asks for
+same-model continuation without delegation, record `WORKFLOW_MODE: direct` and
+`DELEGATION_ORIGIN: none`.
 
 ## Preserve an authorized `$sub-agent` workflow
 
@@ -86,7 +97,7 @@ stop the worker and record the partial result. A fresh root must never create a
 duplicate worker for an `ACTIVE_WORKER_STATE: running` entry.
 
 For the default workflow, record `PRIMARY_MODEL` as the exact model id exposed by the
-host/first-party control (for example, `gpt-5.6-sol-plus` when that is the reported
+host/first-party control (for example, `gpt-6-astra` when that is the reported
 id); do not hardcode or invent a shorthand alias. Always save
 `PRIMARY_REASONING_EFFORT` as the exact known value; use `unknown` only when the
 source effort is genuinely unavailable.
@@ -193,6 +204,11 @@ context_guardian.py --mark-handoff verified \
   --session-id SOURCE_SESSION_ID --target-thread-id TARGET_THREAD_ID
 ```
 
+Check the command's returned `handoff_status` and `target_thread_id` against
+the source session and destination task. If a later authoritative Guardian
+status conflicts with that acknowledgement, treat the handoff as unverified,
+resolve the conflict, and do not report success from an earlier snapshot.
+
 On Windows invoke it with `py -3`; on POSIX use `python3`. If handoff is
 genuinely unavailable or still fails after the bounded retry, acknowledge
 `--mark-handoff blocked --session-id SOURCE_SESSION_ID` and report the concrete
@@ -203,7 +219,7 @@ blocker. Never mark `verified` before all success conditions above are true.
 `$sub-agent` remains explicit and separate:
 
 ```text
-Sol root → explicit $sub-agent → Luna worker (`max`, or same Luna `xhigh` when `max` is unavailable) → Sol root verifies
+primary root → explicit $sub-agent → selected Luna worker (`max`, or same Luna `xhigh` when `max` is unavailable) → primary root verifies
 ```
 
 Handoff never creates new delegation authority. It may carry forward an
