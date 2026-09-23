@@ -1,11 +1,11 @@
 ---
 name: sub-agent
-description: 使用当前主智能体规划和验收，并在当前任务内优先拉起与 Sol 主模型同代的 Luna 子智能体，目标为运行时支持的最高可用推理强度；按同代 max → 同代 xhigh → 同代 Terra High → runtime default 有界回退。用户调用 `$sub-agent`、要求使用默认子智能体工作流、明确要求委派，或同一未完成任务的有效 handoff checkpoint 记录了原始用户的显式委派授权时使用。若没有具体任务，先询问任务；不要自行猜测或主动委派。
+description: 使用当前主智能体规划和验收；用户明确授权委派时，默认让与 GPT-6 Astra/Sol 或 GPT-5.6 Sol 主模型同代的 Luna Max 执行有界任务，同代组合不可用时有界回退或报告阻塞。用户指定的 worker 模型优先。用户调用 `$sub-agent`、要求使用默认子智能体工作流、明确要求委派，或同一未完成任务的有效 handoff checkpoint 记录了原始用户的显式委派授权时使用。若没有具体任务，先询问任务；不要自行猜测或主动委派。
 ---
 
 # Sub-agent
 
-把当前主智能体作为规划者和验收者，优先把**与当前 Sol 主模型同代的 Luna model id**、最高可用推理强度的子智能体作为执行者：GPT-6 Sol 使用 GPT-6 Luna，GPT-5.6 Sol 使用 GPT-5.6 Luna；首选 `max`，若运行时明确仅支持同一代同一 Luna 的 `xhigh` 则降级到 `xhigh`。此工作流假设用户已在界面选择 Sol High 作为当前主智能体；不要声称 Skill 能切换已经运行的主模型。
+把当前主智能体作为规划者和验收者。用户未指定 worker 模型时，GPT-6 Astra/Sol 主任务默认使用 GPT-6 Luna，GPT-5.6 Sol 主任务默认使用 GPT-5.6 Luna；首选 `max`，仅在运行时明确不支持时降到同一 Luna 的 `xhigh`。以当前任务实际主模型为准，不假设用户选择了 Sol High，也不要声称 Skill 能切换已经运行的主模型。
 
 这个 Skill 是**显式编排工作流**，不是全局自动路由器。普通任务不要因为 Luna 更便宜就主动拉起子智能体。
 
@@ -16,7 +16,7 @@ and worker delegation remain separate mechanisms.
 
 ## 启动条件
 
-- 仅在用户显式调用 `$sub-agent`、要求使用默认 Sol–worker 工作流，或明确要求拉起/委派子智能体时启动。
+- 仅在用户显式调用 `$sub-agent`、要求使用默认主智能体–worker 工作流，或明确要求拉起/委派子智能体时启动。
 - 同一未完成任务发生 context handoff 时，若 checkpoint 同时记录
   `WORKFLOW_MODE: sub-agent`、`DELEGATION_ORIGIN: explicit-user` 和明确的
   `DELEGATION_SCOPE`，新主智能体应继承本 Skill。该授权在原任务完成、用户
@@ -25,7 +25,7 @@ and worker delegation remain separate mechanisms.
 - 若任务已经明确，直接开始，不要再次询问模型；默认优先执行者是 Luna `max`，兼容回退不需要额外询问。
 - 用户明确指定的模型、推理强度、并发方式或执行边界优先于本 Skill 的默认值。
 
-## Sol–worker 路由原则
+## 主智能体–worker 路由原则
 
 本 Skill 启动后，按以下职责划分工作，而不是把所有思考都转交 Luna。
 
@@ -33,10 +33,10 @@ and worker delegation remain separate mechanisms.
 
 | 当前主模型 | worker 模型 | 首选 reasoning |
 | --- | --- | --- |
-| GPT-6 Sol | GPT-6 Luna | `max` |
+| GPT-6 Astra / Sol | GPT-6 Luna | `max` |
 | GPT-5.6 Sol | GPT-5.6 Luna | `max` |
 
-worker 必须与当前 Sol 主模型保持同一代；不得让 GPT-6 Sol 拉起 GPT-5.6 Luna，也不得反向跨代。Terra 和 Luna 不是本 Skill 的主 root handoff 目标；Luna 仅在用户显式授权的 Sol–worker 工作流中作为 worker 出现。
+这是默认路由，不覆盖用户明确指定的 worker 模型或推理强度。默认路由不得静默跨代；worker 只在用户显式授权的委派工作流中出现，不能充当 context-handoff 的新 root。
 
 主智能体保留：
 - 需求解释、范围边界和验收标准；
@@ -55,10 +55,10 @@ worker 必须与当前 Sol 主模型保持同一代；不得让 GPT-6 Sol 拉起
 
 ## 模型兼容
 
-- 首选使用当前 Sol 主模型**同代**的 Luna model id 与 `max`：GPT-6 Sol → GPT-6 Luna max；GPT-5.6 Sol → GPT-5.6 Luna max。不要额外访问网络或模型目录探测。`max` 是最高可用目标，不是无条件保证。
+- 首选使用当前主模型**同代**的 Luna model id 与 `max`：GPT-6 Astra/Sol → GPT-6 Luna max；GPT-5.6 Sol → GPT-5.6 Luna max。不要额外访问网络或模型目录探测。`max` 是首选，不是无条件保证。
 - 若工具/API 明确未列出 `max` 但明确列出**同代同一 Luna model id** 的 `xhigh`，改用该 Luna 的 `xhigh`。
-- 只有同代 Luna `xhigh` 也明确不支持时，才在工具明确列出**同代** Terra model id 与 `high` 的情况下回退到该代 Terra High；Terra High 也不支持时，省略 model 和 reasoning override，使用 runtime default。
-- 若能力列表不完整，只有 launch response 明确返回 model 或 reasoning combination `unsupported`/`unavailable` 且没有任何 worker 标识时，才允许进行一次兼容重试：按 `max → xhigh → Terra High → runtime default` 选择下一项已知可用项；该失败最多重试一次，不得继续重试或创建第二个 worker。
+- 只有同代 Luna `xhigh` 也明确不支持时，才在工具明确列出**同代** Terra model id 与 `high` 的情况下回退到该代 Terra High（目前仅 GPT-5.6 路由有此项）。没有可用的同代 worker 时报告阻塞，不省略 override 以使用未知的 runtime default。
+- 若能力列表不完整，只有 launch response 明确返回 model 或 reasoning combination `unsupported`/`unavailable` 且没有任何 worker 标识时，才允许向下一项已知可用的同代组合兼容重试一次；不得继续重试或创建第二个 worker。
 - 鉴权、网络、额度、超时或含糊错误不得触发模型回退。响应一旦返回 worker 标识，即使后续失败也不得通过回退创建重复 worker。
 - 发生回退或运行时无法保证实际模型时，简短告知用户实际选择或限制；不得声称执行者一定是 Luna `max` 或 `xhigh`。
 - 用户明确指定的模型、推理强度、并发方式或执行边界优先于本 Skill 的默认值。
@@ -95,11 +95,11 @@ worker 必须与当前 Sol 主模型保持同一代；不得让 GPT-6 Sol 拉起
 
 ## 与 Context Guardian 的关系
 
-- `$sub-agent`：解决“谁来执行”，只在显式请求时启动同代 Sol–Luna 编排；GPT-6 Sol 首选 GPT-6 Luna `max`，GPT-5.6 Sol 首选 GPT-5.6 Luna `max`，仅按同代规则有界回退。
+- `$sub-agent`：解决“谁来执行”，只在显式请求时启动；GPT-6 Astra/Sol 默认使用 GPT-6 Luna `max`，GPT-5.6 Sol 默认使用 GPT-5.6 Luna `max`，用户明确指定的 worker 模型优先。
 - `context-handoff`：解决“当前主上下文是否应该继续承载任务”。
 - Guardian 触发 handoff 本身不会创造 `$sub-agent` 授权；但同一任务中由用户
   显式开启的授权会通过有效 checkpoint 继承。
-- 对 Sol 主对话，context handoff 始终表示“同代、同一 Sol 模型、同一 reasoning effort”的 old Sol root → fresh Sol root；例如 Sol High → Sol High。
+- context handoff 始终表示“同一精确主模型、同一 reasoning effort”的 old root → fresh root；例如 GPT-6 Astra High → GPT-6 Astra High。
 - 新 root 先恢复主智能体职责并读取 worker 状态：已有完成结果则先验收；
    没有活跃 worker 且授权范围内仍有适合执行者的工作时，才拉起一个 worker。
 - 执行 worker 只会因为原始用户的显式 delegation 条件而出现，不会仅因为

@@ -129,8 +129,8 @@ class ContextGuardianTests(unittest.TestCase):
                 "{}",
             )
 
-    def test_sol_generation_models_require_handoff(self) -> None:
-        for model in ("gpt-6-sol", "gpt-5.6-sol-plus"):
+    def test_primary_models_require_handoff(self) -> None:
+        for model in ("gpt-6-astra", "gpt-6-sol", "gpt-5.6-sol-plus"):
             payload = {
                 "hook_event_name": "PostCompact",
                 "session_id": model,
